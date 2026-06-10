@@ -1,5 +1,6 @@
 name: Standard Runner
 
+
 on:
   workflow_dispatch:
     inputs:
@@ -24,64 +25,66 @@ on:
         type: string
 
 
+
 jobs:
 
   runner:
 
     runs-on: ${{ inputs.runner }}
 
+
     steps:
+
 
       - name: Checkout repository
         uses: actions/checkout@v4
+
 
 
       - name: Show system information
         shell: bash
         run: |
 
-          echo "================================="
+          echo "================================"
           echo "Runner Information"
-          echo "================================="
+          echo "================================"
 
-          echo "Selected runner:"
-          echo "${{ inputs.runner }}"
-
-          echo ""
-
-          echo "OS:"
-          uname -a || ver
+          echo "Runner OS:"
+          echo "$RUNNER_OS"
 
 
           echo ""
-          echo "CPU:"
-          if command -v lscpu >/dev/null
+          echo "CPU"
+
+          if command -v lscpu
           then
               lscpu | grep -E \
               "Model name|CPU\(s\)|Architecture"
           else
-              echo "CPU information unavailable"
+              sysctl -n machdep.cpu.brand_string || true
           fi
 
 
-          echo ""
-          echo "Memory:"
-          if command -v free >/dev/null
-          then
-              free -h
-          else
-              systeminfo | findstr Memory
-          fi
-
 
           echo ""
-          echo "Disk:"
-          df -h || wmic logicaldisk get size,freespace
+          echo "Memory"
+
+          free -h 2>/dev/null || \
+          systeminfo | findstr Memory
+
 
 
           echo ""
-          echo "GPU:"
-          if command -v nvidia-smi >/dev/null
+          echo "Disk"
+
+          df -h || true
+
+
+
+          echo ""
+          echo "GPU"
+
+          if command -v nvidia-smi
           then
               nvidia-smi
           else
@@ -90,11 +93,35 @@ jobs:
 
 
 
-      - name: Start services
+
+      - name: Start Web Terminal
         shell: bash
         run: |
-          chmod +x start.sh
-          ./start.sh
+
+          case "$RUNNER_OS" in
+
+            Linux)
+
+              chmod +x scripts/linux.sh
+              ./scripts/linux.sh
+              ;;
+
+
+            macOS)
+
+              chmod +x scripts/macos.sh
+              ./scripts/macos.sh
+              ;;
+
+
+            Windows)
+
+              pwsh scripts/windows.ps1
+              ;;
+
+
+          esac
+
 
 
 
@@ -103,33 +130,11 @@ jobs:
         run: |
 
           MINUTES=${{ inputs.duration }}
-          SECONDS=$((MINUTES * 60))
+
+          echo "Keep alive: $MINUTES minutes"
 
 
-          echo "Keep alive: ${MINUTES} minutes"
+          sleep $((MINUTES * 60))
 
 
-          START=$(date +%s)
-
-
-          while true
-          do
-
-            NOW=$(date +%s)
-
-            LEFT=$((SECONDS - (NOW - START)))
-
-
-            if [ $LEFT -le 0 ]
-            then
-                echo "Completed"
-                exit 0
-            fi
-
-
-            echo "Running..."
-            echo "Remaining: $((LEFT/60)) minutes"
-
-            sleep 300
-
-          done
+          echo "Runner finished"

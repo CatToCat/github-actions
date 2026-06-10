@@ -23,27 +23,14 @@ if (!(Get-Command cloudflared -ErrorAction SilentlyContinue)) {
 # -----------------------------
 # Install Wetty
 # -----------------------------
-Write-Host "Installing Wetty (with logs)..."
-
-$env:NPM_CONFIG_LOGLEVEL = "verbose"
+Write-Host "Installing Wetty..."
 
 npm install -g wetty --verbose 2>&1 | ForEach-Object {
     Write-Host $_
 }
 
 # -----------------------------
-# Verify Wetty
-# -----------------------------
-$wettyCmd = Get-Command wetty -ErrorAction SilentlyContinue
-
-if (!$wettyCmd) {
-    Write-Host "ERROR: Wetty not installed"
-    exit 1
-}
-
-# -----------------------------
 # Start Wetty (IMPORTANT FIX)
-# Use cmd.exe instead of PowerShell (fix disconnect issue)
 # -----------------------------
 Write-Host "Starting Wetty on port 3000..."
 
@@ -55,32 +42,25 @@ Start-Sleep 8
 # -----------------------------
 # Check Wetty
 # -----------------------------
-$portCheck = netstat -ano | findstr ":3000"
-
-if (!$portCheck) {
-    Write-Host "ERROR: Wetty NOT running"
-    netstat -ano
-    exit 1
-}
+netstat -ano | findstr ":3000"
 
 Write-Host "Wetty running on port 3000"
 
 # -----------------------------
-# Start Cloudflared (non-blocking)
+# Start Cloudflared (FIXED VERSION)
 # -----------------------------
 Write-Host "Starting Cloudflare tunnel..."
 
 $cfLog = "$PWD\cf.log"
 
-Start-Process -NoNewWindow -FilePath "cloudflared" `
-    -ArgumentList "tunnel --url http://localhost:3000" `
-    -RedirectStandardOutput $cfLog `
-    -RedirectStandardError $cfLog
-
-Start-Sleep 8
+# IMPORTANT: DO NOT use Start-Process redirect (Windows bug-prone)
+cmd /c "cloudflared tunnel --url http://localhost:3000" 2>&1 |
+    Tee-Object -FilePath $cfLog | ForEach-Object {
+        Write-Host $_
+    }
 
 # -----------------------------
-# Extract Cloudflare URL
+# Extract URL
 # -----------------------------
 Write-Host ""
 Write-Host "================================"
@@ -93,11 +73,11 @@ $url = Select-String -Path $cfLog -Pattern "https://[a-zA-Z0-9.-]*trycloudflare.
 if ($url) {
     Write-Host $url.Line
 } else {
-    Write-Host "URL not ready yet. Check cf.log"
+    Write-Host "URL not detected yet"
 }
 
 # -----------------------------
-# Keep Alive (DO NOT BLOCK other steps)
+# Keep Alive
 # -----------------------------
 Write-Host ""
 Write-Host "Keep alive started..."

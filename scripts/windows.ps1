@@ -39,33 +39,40 @@ $indexPath = "$PWD\index.html"
 # Start HTTP server
 # -----------------------------
 Write-Host "Starting HTTP server..."
+
 Start-Process python -ArgumentList "-m http.server 7681"
 
 Start-Sleep 3
 
 # -----------------------------
-# IMPORTANT FIX: run cloudflared directly
+# FIXED Cloudflared (IMPORTANT)
 # -----------------------------
 Write-Host "Starting Cloudflare tunnel..."
 
+# ✔ 关键点：直接运行 + pipeline capture
 $logFile = "$PWD\cf.log"
 
-# ❗关键：直接运行，不要 Start-Process
-cmd /c "cloudflared tunnel --url http://localhost:7681 > cf.log 2>&1"
+Start-Process -NoNewWindow `
+    -FilePath "cloudflared" `
+    -ArgumentList "tunnel --url http://localhost:7681" `
+    -RedirectStandardOutput $logFile `
+    -RedirectStandardError $logFile
+
+Start-Sleep 8
 
 # -----------------------------
-# Extract URL
+# Extract URL (robust)
 # -----------------------------
 Write-Host ""
-Write-Host "Checking tunnel URL..."
+Write-Host "Checking tunnel status..."
 
 if (Test-Path $logFile) {
 
     Get-Content $logFile | ForEach-Object { Write-Host $_ }
 
     $url = Select-String -Path $logFile `
-        -Pattern "https://[a-zA-Z0-9.-]*trycloudflare.com" |
-        Select-Object -First 1
+        -Pattern "https://[a-zA-Z0-9.-]*trycloudflare.com" `
+        -AllMatches | Select-Object -First 1
 
     Write-Host ""
     Write-Host "================================"
@@ -76,9 +83,9 @@ if (Test-Path $logFile) {
         Write-Host "Public URL:"
         Write-Host $url.Matches.Value
     } else {
-        Write-Host "No URL detected yet"
+        Write-Host "URL not ready yet (cloudflared still initializing)"
     }
 
 } else {
-    Write-Host "cf.log not created - cloudflared failed"
+    Write-Host "ERROR: cloudflared did not start"
 }

@@ -1,9 +1,9 @@
 Write-Host "================================"
-Write-Host "Windows Web Terminal (Stable)"
+Write-Host "Windows Code-Server Web IDE"
 Write-Host "================================"
 
 # -----------------------------
-# Install Node.js
+# Install Chocolatey dependencies
 # -----------------------------
 if (!(Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host "Installing Node.js..."
@@ -12,49 +12,59 @@ if (!(Get-Command node -ErrorAction SilentlyContinue)) {
 
 $env:Path += ";C:\Program Files\nodejs\"
 
-# -----------------------------
-# Install cloudflared
-# -----------------------------
+if (!(Get-Command python -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing Python..."
+    choco install python -y
+}
+
 if (!(Get-Command cloudflared -ErrorAction SilentlyContinue)) {
     Write-Host "Installing cloudflared..."
     choco install cloudflared -y
 }
 
 # -----------------------------
-# Install Wetty
+# Install code-server
 # -----------------------------
-Write-Host "Installing Wetty..."
+Write-Host "Installing code-server..."
 
-npm install -g wetty --verbose 2>&1 | ForEach-Object {
+npm install -g code-server --verbose 2>&1 | ForEach-Object {
     Write-Host $_
 }
 
 # -----------------------------
-# Start Wetty (IMPORTANT FIX)
+# Verify
 # -----------------------------
-Write-Host "Starting Wetty on port 3000..."
+if (!(Get-Command code-server -ErrorAction SilentlyContinue)) {
+    Write-Host "ERROR: code-server installation failed"
+    exit 1
+}
+
+# -----------------------------
+# Start code-server
+# -----------------------------
+Write-Host "Starting code-server on port 8080..."
 
 Start-Process -NoNewWindow -FilePath "cmd.exe" `
-    -ArgumentList "/c wetty --port 3000 --command cmd.exe"
+    -ArgumentList "/c code-server --bind-addr 0.0.0.0:8080 --auth none"
 
 Start-Sleep 8
 
 # -----------------------------
-# Check Wetty
+# Verify port
 # -----------------------------
-netstat -ano | findstr ":3000"
+netstat -ano | findstr ":8080"
 
-Write-Host "Wetty running on port 3000"
+Write-Host "code-server running on port 8080"
 
 # -----------------------------
-# Start Cloudflared (FIXED VERSION)
+# Start Cloudflare tunnel (SAFE METHOD)
 # -----------------------------
 Write-Host "Starting Cloudflare tunnel..."
 
 $cfLog = "$PWD\cf.log"
 
-# IMPORTANT: DO NOT use Start-Process redirect (Windows bug-prone)
-cmd /c "cloudflared tunnel --url http://localhost:3000" 2>&1 |
+# IMPORTANT: capture output safely
+cmd /c "cloudflared tunnel --url http://localhost:8080" 2>&1 |
     Tee-Object -FilePath $cfLog | ForEach-Object {
         Write-Host $_
     }
@@ -73,16 +83,16 @@ $url = Select-String -Path $cfLog -Pattern "https://[a-zA-Z0-9.-]*trycloudflare.
 if ($url) {
     Write-Host $url.Line
 } else {
-    Write-Host "URL not detected yet"
+    Write-Host "URL not ready yet (check cf.log)"
 }
 
 # -----------------------------
-# Keep Alive
+# Keep alive
 # -----------------------------
 Write-Host ""
 Write-Host "Keep alive started..."
 
-$minutes = 30
+$minutes = 60
 $end = (Get-Date).AddMinutes($minutes)
 
 while ((Get-Date) -lt $end) {

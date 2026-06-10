@@ -11,10 +11,9 @@ on:
         options:
           - ubuntu-latest
           - ubuntu-24.04
-          - ubuntu-22.04
-          - windows-latest
           - macos-latest
         default: ubuntu-latest
+
 
       duration:
         description: "Keep alive duration (minutes)"
@@ -24,6 +23,7 @@ on:
 
 
 jobs:
+
   runner:
 
     runs-on: ${{ inputs.runner }}
@@ -46,85 +46,111 @@ jobs:
 
           echo "Kernel:"
           uname -a
+
           echo ""
 
           echo "Architecture:"
           uname -m
+
+
           echo ""
 
           echo "CPU:"
 
           if [[ "$RUNNER_OS" == "Linux" ]]; then
+
               lscpu | grep -E "Model name|CPU\\(s\\)" || true
 
+
           elif [[ "$RUNNER_OS" == "macOS" ]]; then
+
               sysctl -n machdep.cpu.brand_string
 
-          elif [[ "$RUNNER_OS" == "Windows" ]]; then
-              powershell -Command "Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors"
           fi
+
 
           echo ""
 
           echo "Memory:"
 
           if [[ "$RUNNER_OS" == "Linux" ]]; then
+
               free -h
 
+
           elif [[ "$RUNNER_OS" == "macOS" ]]; then
+
               TOTAL=$(sysctl -n hw.memsize)
+
               echo "Total Memory: $((TOTAL / 1024 / 1024)) MB"
 
-          elif [[ "$RUNNER_OS" == "Windows" ]]; then
-              powershell -Command "Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize,FreePhysicalMemory"
           fi
+
 
           echo ""
 
           echo "Disk:"
 
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-              powershell -Command "Get-PSDrive C"
+          df -h /
 
-          else
-              df -h /
-          fi
 
           echo ""
 
           echo "GPU:"
 
           if command -v nvidia-smi >/dev/null 2>&1; then
+
               nvidia-smi
+
           else
+
               echo "No NVIDIA GPU detected"
+
           fi
+
 
 
       - name: Start Web Terminal
         shell: bash
         run: |
+
           case "$RUNNER_OS" in
 
             Linux)
+
               bash scripts/linux.sh
+
               ;;
+
 
             macOS)
+
               bash scripts/macos.sh
+
               ;;
 
-            Windows)
-              pwsh scripts/windows.ps1
+
+            *)
+
+              echo "Unsupported OS: $RUNNER_OS"
+              exit 1
+
               ;;
 
           esac
 
 
+
       - name: Keep Alive
         shell: bash
         run: |
+
           MINUTES=${{ inputs.duration }}
+
           echo "Keep alive: $MINUTES minutes"
+
+
           sleep $((MINUTES * 60))
+
+
           echo "Finished"

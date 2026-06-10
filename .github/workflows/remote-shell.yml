@@ -1,5 +1,4 @@
-name: Standard Runner
-
+name: Standard Web Runner
 
 on:
   workflow_dispatch:
@@ -17,7 +16,6 @@ on:
           - macos-latest
         default: ubuntu-latest
 
-
       duration:
         description: "Keep alive duration (minutes)"
         required: true
@@ -25,116 +23,101 @@ on:
         type: string
 
 
-
 jobs:
-
   runner:
 
     runs-on: ${{ inputs.runner }}
 
-
     steps:
 
-
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
 
-
-      - name: Show system information
+      - name: System Info (Fixed Cross-Platform)
         shell: bash
         run: |
-
           echo "================================"
           echo "Runner Information"
           echo "================================"
 
-          echo "Runner OS:"
-          echo "$RUNNER_OS"
-
-
+          echo "OS: $RUNNER_OS"
           echo ""
-          echo "CPU"
 
-          if command -v lscpu
-          then
-              lscpu | grep -E \
-              "Model name|CPU\(s\)|Architecture"
-          else
+          echo "Kernel:"
+          uname -a
+          echo ""
+
+          echo "Architecture:"
+          uname -m
+          echo ""
+
+          echo "CPU:"
+
+          if command -v lscpu >/dev/null 2>&1; then
+              lscpu | grep -E "Model name|CPU\\(s\\)" || true
+
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
               sysctl -n machdep.cpu.brand_string || true
+
+          else
+              echo "CPU info not available"
           fi
 
+          echo ""
 
+          echo "Memory:"
+
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+              free -h
+
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+              TOTAL_MEM=$(sysctl -n hw.memsize)
+              echo "Total Memory: $((TOTAL_MEM / 1024 / 1024)) MB"
+
+          else
+              echo "Memory info not available"
+          fi
 
           echo ""
-          echo "Memory"
 
-          free -h 2>/dev/null || \
-          systeminfo | findstr Memory
-
-
+          echo "Disk:"
+          df -h /
 
           echo ""
-          echo "Disk"
 
-          df -h || true
-
-
-
-          echo ""
-          echo "GPU"
-
-          if command -v nvidia-smi
-          then
+          echo "GPU:"
+          if command -v nvidia-smi >/dev/null 2>&1; then
               nvidia-smi
           else
               echo "No NVIDIA GPU detected"
           fi
 
 
-
-
       - name: Start Web Terminal
         shell: bash
         run: |
-
           case "$RUNNER_OS" in
 
             Linux)
-
-              chmod +x scripts/linux.sh
-              ./scripts/linux.sh
+              bash scripts/linux.sh
               ;;
-
 
             macOS)
-
-              chmod +x scripts/macos.sh
-              ./scripts/macos.sh
+              bash scripts/macos.sh
               ;;
-
 
             Windows)
-
               pwsh scripts/windows.ps1
               ;;
-
 
           esac
 
 
-
-
-      - name: Keep runner alive
+      - name: Keep Alive
         shell: bash
         run: |
-
           MINUTES=${{ inputs.duration }}
-
           echo "Keep alive: $MINUTES minutes"
-
-
           sleep $((MINUTES * 60))
-
-
-          echo "Runner finished"
+          echo "Finished"

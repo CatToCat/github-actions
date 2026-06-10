@@ -39,24 +39,19 @@ $indexPath = "$PWD\index.html"
 # Start HTTP server
 # -----------------------------
 Write-Host "Starting HTTP server..."
-
 Start-Process python -ArgumentList "-m http.server 7681"
 
 Start-Sleep 3
 
 # -----------------------------
-# Start Cloudflared (FIXED)
+# IMPORTANT FIX: run cloudflared directly
 # -----------------------------
 Write-Host "Starting Cloudflare tunnel..."
 
 $logFile = "$PWD\cf.log"
 
-# ✔ 正确方式：直接运行 + Tee-Object
-Start-Process powershell -ArgumentList @"
-cloudflared tunnel --url http://localhost:7681 | Tee-Object -FilePath $logFile
-"@
-
-Start-Sleep 10
+# ❗关键：直接运行，不要 Start-Process
+cmd /c "cloudflared tunnel --url http://localhost:7681 > cf.log 2>&1"
 
 # -----------------------------
 # Extract URL
@@ -66,10 +61,13 @@ Write-Host "Checking tunnel URL..."
 
 if (Test-Path $logFile) {
 
+    Get-Content $logFile | ForEach-Object { Write-Host $_ }
+
     $url = Select-String -Path $logFile `
         -Pattern "https://[a-zA-Z0-9.-]*trycloudflare.com" |
         Select-Object -First 1
 
+    Write-Host ""
     Write-Host "================================"
     Write-Host "Windows Web Server Ready"
     Write-Host "================================"
@@ -78,10 +76,9 @@ if (Test-Path $logFile) {
         Write-Host "Public URL:"
         Write-Host $url.Matches.Value
     } else {
-        Write-Host "Tunnel not ready yet:"
-        Get-Content $logFile
+        Write-Host "No URL detected yet"
     }
 
 } else {
-    Write-Host "Cloudflared log not created"
+    Write-Host "cf.log not created - cloudflared failed"
 }

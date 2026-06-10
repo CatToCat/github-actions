@@ -3,7 +3,7 @@ Write-Host "Windows Web Server Mode"
 Write-Host "================================"
 
 # -----------------------------
-# Install Python (if missing)
+# Install Python
 # -----------------------------
 if (!(Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "Installing Python..."
@@ -19,18 +19,17 @@ if (!(Get-Command cloudflared -ErrorAction SilentlyContinue)) {
 }
 
 # -----------------------------
-# Create a simple web page
+# Create web page
 # -----------------------------
 $indexPath = "$PWD\index.html"
 
 @"
 <html>
 <head>
-  <title>GitHub Actions Windows Runner</title>
+  <title>Windows Runner</title>
 </head>
 <body>
   <h1>Windows Runner Active</h1>
-  <p>Status: Running via GitHub Actions</p>
   <p>Time: $(Get-Date)</p>
 </body>
 </html>
@@ -39,23 +38,44 @@ $indexPath = "$PWD\index.html"
 # -----------------------------
 # Start HTTP server
 # -----------------------------
-Write-Host "Starting Python HTTP server on port 7681..."
+Write-Host "Starting HTTP server..."
 
 Start-Process python -ArgumentList "-m http.server 7681"
 
 Start-Sleep 3
 
 # -----------------------------
-# Start Cloudflared tunnel
+# Start Cloudflared (IMPORTANT FIX)
 # -----------------------------
 Write-Host "Starting Cloudflare tunnel..."
 
-Start-Process cloudflared -ArgumentList "tunnel --url http://localhost:7681"
+# ❗关键：不要 Start-Process，要直接运行并抓输出
+$logFile = "$PWD\cf.log"
+
+Start-Process -NoNewWindow -FilePath "cloudflared" `
+    -ArgumentList "tunnel --url http://localhost:7681" `
+    -RedirectStandardOutput $logFile `
+    -RedirectStandardError $logFile
 
 Start-Sleep 10
 
+# -----------------------------
+# Extract URL
+# -----------------------------
 Write-Host ""
+Write-Host "Checking tunnel URL..."
+
+$url = Select-String -Path $logFile -Pattern "https://[a-zA-Z0-9.-]*trycloudflare.com" |
+       Select-Object -First 1
+
 Write-Host "================================"
 Write-Host "Windows Web Server Ready"
-Write-Host "Open Cloudflare URL above"
 Write-Host "================================"
+
+if ($url) {
+    Write-Host "Public URL:"
+    Write-Host $url.Matches.Value
+} else {
+    Write-Host "URL not found yet, log output:"
+    Get-Content $logFile
+}

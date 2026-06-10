@@ -1,33 +1,61 @@
-Write-Host "Starting Windows Web Terminal (Wetty)"
+Write-Host "================================"
+Write-Host "Windows Web Server Mode"
+Write-Host "================================"
 
-# Node.js
-if (!(Get-Command node -ErrorAction SilentlyContinue)) {
-    choco install nodejs -y
+# -----------------------------
+# Install Python (if missing)
+# -----------------------------
+if (!(Get-Command python -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing Python..."
+    choco install python -y
 }
 
-# cloudflared
+# -----------------------------
+# Install cloudflared
+# -----------------------------
 if (!(Get-Command cloudflared -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing cloudflared..."
     choco install cloudflared -y
 }
 
-# Install wetty
-npm install -g wetty
+# -----------------------------
+# Create a simple web page
+# -----------------------------
+$indexPath = "$PWD\index.html"
 
-# Cleanup
-Stop-Process -Name node -Force -ErrorAction SilentlyContinue
-Stop-Process -Name cloudflared -Force -ErrorAction SilentlyContinue
+@"
+<html>
+<head>
+  <title>GitHub Actions Windows Runner</title>
+</head>
+<body>
+  <h1>Windows Runner Active</h1>
+  <p>Status: Running via GitHub Actions</p>
+  <p>Time: $(Get-Date)</p>
+</body>
+</html>
+"@ | Out-File -Encoding utf8 $indexPath
 
-# Start Wetty (PowerShell terminal)
-Start-Process wetty -ArgumentList "--port 7681 --command powershell"
+# -----------------------------
+# Start HTTP server
+# -----------------------------
+Write-Host "Starting Python HTTP server on port 7681..."
 
-Start-Sleep 5
+Start-Process python -ArgumentList "-m http.server 7681"
 
-# Start tunnel
+Start-Sleep 3
+
+# -----------------------------
+# Start Cloudflared tunnel
+# -----------------------------
+Write-Host "Starting Cloudflare tunnel..."
+
 Start-Process cloudflared -ArgumentList "tunnel --url http://localhost:7681"
 
 Start-Sleep 10
 
 Write-Host ""
 Write-Host "================================"
-Write-Host "Windows Web Terminal Ready"
+Write-Host "Windows Web Server Ready"
+Write-Host "Open Cloudflare URL above"
 Write-Host "================================"

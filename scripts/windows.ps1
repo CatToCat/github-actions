@@ -1,103 +1,95 @@
+param(
+    [string]$Duration = "30"
+)
+
 Write-Host "================================"
-Write-Host "Windows Code-Server Web IDE"
+Write-Host "Windows OpenVSCode Server"
 Write-Host "================================"
 
-# -----------------------------
-# Install Chocolatey dependencies
-# -----------------------------
-if (!(Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing Node.js..."
-    choco install nodejs -y
-}
+$PORT = 3000
 
-$env:Path += ";C:\Program Files\nodejs\"
-
-if (!(Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing Python..."
-    choco install python -y
-}
-
+# ----------------------------
+# Install dependencies
+# ----------------------------
 if (!(Get-Command cloudflared -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing cloudflared..."
     choco install cloudflared -y
 }
 
-# -----------------------------
-# Install code-server
-# -----------------------------
-Write-Host "Installing code-server..."
-
-npm install -g code-server --verbose 2>&1 | ForEach-Object {
-    Write-Host $_
+if (!(Get-Command wget -ErrorAction SilentlyContinue)) {
+    choco install wget -y
 }
 
-# -----------------------------
-# Verify
-# -----------------------------
-if (!(Get-Command code-server -ErrorAction SilentlyContinue)) {
-    Write-Host "ERROR: code-server installation failed"
-    exit 1
-}
+# ----------------------------
+# Download OpenVSCode Server
+# ----------------------------
+Write-Host "Downloading OpenVSCode Server..."
 
-# -----------------------------
-# Start code-server
-# -----------------------------
-Write-Host "Starting code-server on port 8080..."
+Invoke-WebRequest `
+  -Uri "https://github.com/gitpod-io/openvscode-server/releases/latest/download/openvscode-server-win32-x64.zip" `
+  -OutFile "vscode.zip"
 
-Start-Process -NoNewWindow -FilePath "cmd.exe" `
-    -ArgumentList "/c code-server --bind-addr 0.0.0.0:8080 --auth none"
+Expand-Archive -Path "vscode.zip" -DestinationPath "." -Force
 
-Start-Sleep 8
+$VSDir = Get-ChildItem -Directory | Where-Object { $_.Name -like "openvscode*" } | Select-Object -First 1
 
-# -----------------------------
-# Verify port
-# -----------------------------
-netstat -ano | findstr ":8080"
+# ----------------------------
+# Start VS Code Web Server
+# ----------------------------
+Write-Host "Starting OpenVSCode Server..."
 
-Write-Host "code-server running on port 8080"
+Start-Process `
+  -FilePath "$VSDir\bin\openvscode-server.exe" `
+  -ArgumentList "--port $PORT --host 0.0.0.0" `
+  -NoNewWindow
 
-# -----------------------------
-# Start Cloudflare tunnel (SAFE METHOD)
-# -----------------------------
-Write-Host "Starting Cloudflare tunnel..."
+Start-Sleep 5
+
+# ----------------------------
+# Start Cloudflare Tunnel (IMPORTANT FIXED)
+# ----------------------------
+Write-Host "Starting Cloudflare Tunnel..."
 
 $cfLog = "$PWD\cf.log"
 
-# IMPORTANT: capture output safely
-cmd /c "cloudflared tunnel --url http://localhost:8080" 2>&1 |
-    Tee-Object -FilePath $cfLog | ForEach-Object {
-        Write-Host $_
-    }
+Start-Process `
+  -FilePath "cloudflared" `
+  -ArgumentList "tunnel --url http://localhost:$PORT" `
+  -RedirectStandardOutput $cfLog `
+  -RedirectStandardError $cfLog `
+  -NoNewWindow
 
-# -----------------------------
+Start-Sleep 8
+
+# ----------------------------
 # Extract URL
-# -----------------------------
+# ----------------------------
+$url = (Get-Content $cfLog | Select-String -Pattern "https://.*trycloudflare.com" | Select-Object -First 1)
+
 Write-Host ""
 Write-Host "================================"
-Write-Host "Cloudflare Public URL"
+Write-Host "Web IDE Ready"
 Write-Host "================================"
-
-$url = Select-String -Path $cfLog -Pattern "https://[a-zA-Z0-9.-]*trycloudflare.com" |
-       Select-Object -First 1
 
 if ($url) {
-    Write-Host $url.Line
+    Write-Host "URL: $($url.Matches.Value)"
 } else {
-    Write-Host "URL not ready yet (check cf.log)"
+    Write-Host "URL not ready yet, check cf.log"
 }
 
-# -----------------------------
+# ----------------------------
 # Keep alive
-# -----------------------------
-Write-Host ""
-Write-Host "Keep alive started..."
+# ----------------------------
+$seconds = [int]$Duration * 60
+$start = Get-Date
 
-$minutes = 60
-$end = (Get-Date).AddMinutes($minutes)
+Write-Host "Keep alive: $Duration minutes"
 
-while ((Get-Date) -lt $end) {
-    Write-Host ("Running... {0}" -f (Get-Date))
-    Start-Sleep 300
+while ($true) {
+    $elapsed = (Get-Date) - $start
+    if ($elapsed.TotalSeconds -gt $seconds) {
+        break
+    }
+
+    Write-Host "Running... $([int]$elapsed.TotalMinutes)/$Duration min"
+    Start-Sleep 60
 }
-
-Write-Host "Done"

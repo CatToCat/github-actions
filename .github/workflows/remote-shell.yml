@@ -1,0 +1,135 @@
+name: Standard Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      runner:
+        description: "Select runner OS"
+        required: true
+        type: choice
+        options:
+          - ubuntu-latest
+          - ubuntu-24.04
+          - ubuntu-22.04
+          - windows-latest
+          - macos-latest
+        default: ubuntu-latest
+
+
+      duration:
+        description: "Keep alive duration (minutes)"
+        required: true
+        default: "30"
+        type: string
+
+
+jobs:
+
+  runner:
+
+    runs-on: ${{ inputs.runner }}
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      - name: Show system information
+        shell: bash
+        run: |
+
+          echo "================================="
+          echo "Runner Information"
+          echo "================================="
+
+          echo "Selected runner:"
+          echo "${{ inputs.runner }}"
+
+          echo ""
+
+          echo "OS:"
+          uname -a || ver
+
+
+          echo ""
+          echo "CPU:"
+          if command -v lscpu >/dev/null
+          then
+              lscpu | grep -E \
+              "Model name|CPU\(s\)|Architecture"
+          else
+              echo "CPU information unavailable"
+          fi
+
+
+          echo ""
+          echo "Memory:"
+          if command -v free >/dev/null
+          then
+              free -h
+          else
+              systeminfo | findstr Memory
+          fi
+
+
+          echo ""
+          echo "Disk:"
+          df -h || wmic logicaldisk get size,freespace
+
+
+          echo ""
+          echo "GPU:"
+          if command -v nvidia-smi >/dev/null
+          then
+              nvidia-smi
+          else
+              echo "No NVIDIA GPU detected"
+          fi
+
+
+
+      - name: Start services
+        shell: bash
+        run: |
+          chmod +x start.sh
+          ./start.sh
+
+
+
+      - name: Keep runner alive
+        shell: bash
+        run: |
+
+          MINUTES=${{ inputs.duration }}
+          SECONDS=$((MINUTES * 60))
+
+
+          echo "Keep alive: ${MINUTES} minutes"
+
+
+          START=$(date +%s)
+
+
+          while true
+          do
+
+            NOW=$(date +%s)
+
+            LEFT=$((SECONDS - (NOW - START)))
+
+
+            if [ $LEFT -le 0 ]
+            then
+                echo "Completed"
+                exit 0
+            fi
+
+
+            echo "Running..."
+            echo "Remaining: $((LEFT/60)) minutes"
+
+            sleep 300
+
+          done

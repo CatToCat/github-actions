@@ -1,36 +1,43 @@
 Write-Host "================================"
-Write-Host "Windows Web Server Mode"
+Write-Host "Windows Web Terminal (Wetty)"
 Write-Host "================================"
 
-# Install Python
-if (!(Get-Command python -ErrorAction SilentlyContinue)) {
-    choco install python -y
+# -----------------------------
+# Install Node.js
+# -----------------------------
+if (!(Get-Command node -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing Node.js..."
+    choco install nodejs -y
 }
 
+# -----------------------------
 # Install cloudflared
+# -----------------------------
 if (!(Get-Command cloudflared -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing cloudflared..."
     choco install cloudflared -y
 }
 
-# Create page
-@"
-<html>
-<head><title>Windows Runner</title></head>
-<body>
-<h1>Windows Runner Active</h1>
-<p>Time: $(Get-Date)</p>
-</body>
-</html>
-"@ | Out-File index.html -Encoding utf8
+# -----------------------------
+# Install Wetty
+# -----------------------------
+if (!(Get-Command wetty -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing Wetty..."
+    npm install -g wetty
+}
 
-# Start HTTP server
-Start-Process python -ArgumentList "-m http.server 7681"
+# -----------------------------
+# Start Wetty (PowerShell terminal)
+# -----------------------------
+Write-Host "Starting Wetty on port 3000..."
 
-Start-Sleep 3
+Start-Process wetty -ArgumentList "--port 3000 --command powershell.exe"
 
-# FIXED cloudflared (IMPORTANT)
+Start-Sleep 5
+
+# -----------------------------
+# Start Cloudflare Tunnel
+# -----------------------------
 Write-Host "Starting Cloudflare tunnel..."
 
-$logFile = "$PWD\cf.log"
-
-& cloudflared tunnel --url http://localhost:7681 2>&1 | Tee-Object -FilePath $logFile
+& cloudflared tunnel --url http://localhost:3000

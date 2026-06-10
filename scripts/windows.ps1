@@ -45,17 +45,16 @@ Start-Process python -ArgumentList "-m http.server 7681"
 Start-Sleep 3
 
 # -----------------------------
-# Start Cloudflared (IMPORTANT FIX)
+# Start Cloudflared (FIXED)
 # -----------------------------
 Write-Host "Starting Cloudflare tunnel..."
 
-# ❗关键：不要 Start-Process，要直接运行并抓输出
 $logFile = "$PWD\cf.log"
 
-Start-Process -NoNewWindow -FilePath "cloudflared" `
-    -ArgumentList "tunnel --url http://localhost:7681" `
-    -RedirectStandardOutput $logFile `
-    -RedirectStandardError $logFile
+# ✔ 正确方式：直接运行 + Tee-Object
+Start-Process powershell -ArgumentList @"
+cloudflared tunnel --url http://localhost:7681 | Tee-Object -FilePath $logFile
+"@
 
 Start-Sleep 10
 
@@ -65,17 +64,24 @@ Start-Sleep 10
 Write-Host ""
 Write-Host "Checking tunnel URL..."
 
-$url = Select-String -Path $logFile -Pattern "https://[a-zA-Z0-9.-]*trycloudflare.com" |
-       Select-Object -First 1
+if (Test-Path $logFile) {
 
-Write-Host "================================"
-Write-Host "Windows Web Server Ready"
-Write-Host "================================"
+    $url = Select-String -Path $logFile `
+        -Pattern "https://[a-zA-Z0-9.-]*trycloudflare.com" |
+        Select-Object -First 1
 
-if ($url) {
-    Write-Host "Public URL:"
-    Write-Host $url.Matches.Value
+    Write-Host "================================"
+    Write-Host "Windows Web Server Ready"
+    Write-Host "================================"
+
+    if ($url) {
+        Write-Host "Public URL:"
+        Write-Host $url.Matches.Value
+    } else {
+        Write-Host "Tunnel not ready yet:"
+        Get-Content $logFile
+    }
+
 } else {
-    Write-Host "URL not found yet, log output:"
-    Get-Content $logFile
+    Write-Host "Cloudflared log not created"
 }

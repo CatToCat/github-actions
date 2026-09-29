@@ -47,8 +47,20 @@ def cpu_model():
                         return line.split(":", 1)[1].strip()
         except OSError:
             pass
-        out = run(["lscpu"])
-        return out
+        try:
+            res = subprocess.run(["lscpu"], capture_output=True, text=True, timeout=20)
+            info = {}
+            for line in res.stdout.splitlines():
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    info.setdefault(k.strip(), v.strip())
+            model = info.get("Model name")
+            vendor = info.get("Vendor ID")
+            if model and vendor and vendor not in model:
+                return f"{vendor} {model}"
+            return model or vendor
+        except Exception:  # noqa: BLE001
+            return None
     if system == "Darwin":
         return run(["sysctl", "-n", "machdep.cpu.brand_string"])
     if system == "Windows":
@@ -122,7 +134,8 @@ def os_name():
     if system == "Darwin":
         return f"macOS {platform.mac_ver()[0]}"
     if system == "Windows":
-        return f"Windows {platform.release()} ({platform.version()})"
+        release = platform.release().replace("Server", " Server")
+        return f"Windows {release} ({platform.version()})"
     return platform.platform()
 
 

@@ -65,11 +65,21 @@ def parse_readme(text):
     return rows
 
 
+def fetch_readme(retries=3):
+    last = None
+    for _ in range(retries):
+        try:
+            with urllib.request.urlopen(README_URL, timeout=30) as resp:
+                return resp.read().decode("utf-8")
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+    raise last
+
+
 def main():
     source = "readme"
     try:
-        with urllib.request.urlopen(README_URL, timeout=30) as resp:
-            rows = parse_readme(resp.read().decode("utf-8"))
+        rows = parse_readme(fetch_readme())
         if not rows:
             raise ValueError("no rows parsed")
     except Exception as exc:  # noqa: BLE001

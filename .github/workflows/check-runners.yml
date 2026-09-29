@@ -90,8 +90,6 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.WORKFLOW_TOKEN || github.token }}
 
       - name: Wait for probe jobs
         id: wait
@@ -130,20 +128,11 @@ jobs:
 
       - name: Save usable runners
         if: inputs.labels == ''
-        env:
-          HAS_WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN != '' }}
         run: |
-          if [[ "$HAS_WORKFLOW_TOKEN" == "true" ]]; then
-            python3 scripts/sync-runners.py --report report.json --out .github/runners.json \
-              --workflow .github/workflows/web-terminal.yml
-            FILES=".github/runners.json .github/workflows/web-terminal.yml"
-          else
-            python3 scripts/sync-runners.py --report report.json --out .github/runners.json
-            FILES=".github/runners.json"
-            echo "::warning::WORKFLOW_TOKEN secret not set, only .github/runners.json is updated. Web Terminal options were not synced."
-          fi
+          python3 scripts/sync-runners.py --report report.json --out runners/runners.json
+          cp report.md runners/README.md
 
-          git add $FILES
+          git add runners/
           if git diff --cached --quiet; then
             echo "Runner list unchanged"
             exit 0

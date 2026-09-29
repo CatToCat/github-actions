@@ -1,0 +1,135 @@
+name: Check Runners
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      labels:
+        description: "Comma separated labels to test (empty = auto discover from actions/runner-images)"
+        required: false
+        default: ""
+        type: string
+
+      include_larger:
+        description: "Include -large / -xlarge labels (paid, org/Team plan only)"
+        required: false
+        default: false
+        type: boolean
+
+      include_deprecated:
+        description: "Include deprecated images"
+        required: false
+        default: true
+        type: boolean
+
+      queue_timeout:
+        description: "Minutes to wait for a runner before marking a label unavailable"
+        required: false
+        default: "5"
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Discover runner labels
+        id: discover
+        env:
+          LABELS: ${{ inputs.labels }}
+          INCLUDE_LARGER: ${{ inputs.include_larger }}
+          INCLUDE_DEPRECATED: ${{ inputs.include_deprecated }}
+        run: python3 scripts/discover-runners.py
+
+
+  probe:
+    name: probe ${{ matrix.label }}
+    needs: discover
+    runs-on: ${{ matrix.label }}
+    timeout-minutes: 10
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Probe runner
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then PY=python; else PY=$(command -v python3 || command -v python); fi
+          mkdir -p probe-out
+          "$PY" scripts/probe-runner.py "${{ matrix.label }}" "probe-out/${{ matrix.label }}.json"
+
+      - name: Upload probe result
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-${{ matrix.label }}
+          path: probe-out/${{ matrix.label }}.json
+          retention-days: 7
+
+
+  watch:
+    needs: discover
+    runs-on: ubuntu-latest
+    outputs:
+      pending: ${{ steps.wait.outputs.pending }}
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for probe jobs
+        id: wait
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          QUEUE_TIMEOUT: ${{ inputs.queue_timeout }}
+          JOB_PREFIX: "probe "
+          OUTPUT: jobs.json
+        run: python3 scripts/wait-probes.py
+
+      - name: Download probe results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: probe-*
+          path: probes
+
+      - name: Build report
+        env:
+          MATRIX: ${{ needs.discover.outputs.matrix }}
+          JOBS: jobs.json
+          PROBES: probes
+          REPORT_MD: report.md
+          REPORT_JSON: report.json
+        run: |
+          python3 scripts/report-runners.py
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-report
+          path: |
+            report.md
+            report.json
+            jobs.json
+
+      - name: Cancel jobs stuck in queue
+        if: steps.wait.outputs.pending != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Some labels never got a runner, cancelling the rest of this run."
+          gh api -X POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"

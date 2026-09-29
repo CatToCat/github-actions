@@ -17,12 +17,12 @@ on:
           - ubuntu-24.04-arm  # Ubuntu 24.04.5 LTS, arm64, 4C, 15.6G RAM, 107.8G free
           - ubuntu-22.04      # Ubuntu 22.04.5 LTS, x64, 4C, 15.6G RAM, 86.2G free, KVM
           - ubuntu-22.04-arm  # Ubuntu 22.04.5 LTS, arm64, 4C, 15.6G RAM, 110.5G free
-          - xcode-27          # macOS 27.0, arm64, 3C, 7.0G RAM, 38.4G free
-          - macos-26-intel    # macOS 26.6.1, x64, 4C, 14.0G RAM, 136.8G free
-          - macos-latest      # macOS 26.6.2, arm64, 3C, 7.0G RAM, 95.6G free
-          - macos-26          # macOS 26.6.2, arm64, 3C, 7.0G RAM, 95.5G free
-          - macos-15-intel    # macOS 15.7.9, x64, 4C, 14.0G RAM, 108.0G free
-          - macos-15          # macOS 15.7.9, arm64, 3C, 7.0G RAM, 42.8G free
+          - xcode-27          # macOS 27.0, arm64, 3C, 7.0G RAM, 37.2G free
+          - macos-26-intel    # macOS 26.6.1, x64, 4C, 14.0G RAM, 136.2G free
+          - macos-latest      # macOS 26.6.2, arm64, 5C, 14.0G RAM, 95.2G free
+          - macos-26          # macOS 26.6.2, arm64, 3C, 7.0G RAM, 95.6G free
+          - macos-15-intel    # macOS 15.7.9, x64, 4C, 14.0G RAM, 108.8G free
+          - macos-15          # macOS 15.7.9, arm64, 3C, 7.0G RAM, 43.2G free
         default: ubuntu-latest
         # runners:end
 

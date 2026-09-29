@@ -29,7 +29,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 jobs:
@@ -90,6 +90,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN || github.token }}
 
       - name: Wait for probe jobs
         id: wait
@@ -125,6 +127,32 @@ jobs:
             report.md
             report.json
             jobs.json
+
+      - name: Save usable runners
+        if: inputs.labels == ''
+        env:
+          HAS_WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN != '' }}
+        run: |
+          if [[ "$HAS_WORKFLOW_TOKEN" == "true" ]]; then
+            python3 scripts/sync-runners.py --report report.json --out .github/runners.json \
+              --workflow .github/workflows/web-terminal.yml
+            FILES=".github/runners.json .github/workflows/web-terminal.yml"
+          else
+            python3 scripts/sync-runners.py --report report.json --out .github/runners.json
+            FILES=".github/runners.json"
+            echo "::warning::WORKFLOW_TOKEN secret not set, only .github/runners.json is updated. Web Terminal options were not synced."
+          fi
+
+          git add $FILES
+          if git diff --cached --quiet; then
+            echo "Runner list unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: update available runners"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Cancel jobs stuck in queue
         if: steps.wait.outputs.pending != '0'

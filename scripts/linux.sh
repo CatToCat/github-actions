@@ -12,7 +12,11 @@ fi
 
 # cloudflared
 if ! command -v cloudflared >/dev/null 2>&1; then
-  wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+  case "$(uname -m)" in
+    aarch64|arm64) CF_ARCH=arm64 ;;
+    *) CF_ARCH=amd64 ;;
+  esac
+  wget -q "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" -O cloudflared
   chmod +x cloudflared
   sudo mv cloudflared /usr/local/bin/
 fi

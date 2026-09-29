@@ -29,7 +29,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
   actions: write
 
 jobs:
@@ -90,6 +90,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.WORKFLOW_TOKEN || github.token }}
 
       - name: Wait for probe jobs
         id: wait
@@ -126,20 +128,26 @@ jobs:
             report.json
             jobs.json
 
-      - name: Save usable runners
+      - name: Sync Web Terminal runners
         if: inputs.labels == ''
+        env:
+          HAS_WORKFLOW_TOKEN: ${{ secrets.WORKFLOW_TOKEN != '' }}
         run: |
-          python3 scripts/sync-runners.py --report report.json --out runners/runners.json
-          cp report.md runners/README.md
+          if [[ "$HAS_WORKFLOW_TOKEN" != "true" ]]; then
+            echo "::error::WORKFLOW_TOKEN secret is not set. GitHub's default token cannot push changes to .github/workflows/, so the Web Terminal dropdown cannot be updated."
+            exit 1
+          fi
 
-          git add runners/
+          python3 scripts/sync-runners.py --report report.json --workflow .github/workflows/web-terminal.yml
+
+          git add .github/workflows/web-terminal.yml
           if git diff --cached --quiet; then
             echo "Runner list unchanged"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: update available runners"
+          git commit -m "chore: sync web terminal runners"
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
